@@ -1,12 +1,18 @@
 package main
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
 
+	_ "github.com/go-sql-driver/mysql"
 	"github.com/gorilla/mux"
+)
+
+var (
+	DB *sql.DB
 )
 
 type Note struct {
@@ -72,15 +78,15 @@ func createNotes(w http.ResponseWriter, r *http.Request) {
 	var itemNotes Note
 	_ = json.NewDecoder(r.Body).Decode(&itemNotes)
 
-	allNotes = append(allNotes, itemNotes)
+	insertNotes(DB, itemNotes)
 
 	w.WriteHeader(http.StatusOK)
 	response := Response{
-		Code: http.StatusOK,
+		Code:    http.StatusOK,
 		Message: "Success Created",
 	}
 
-	resp,_ := json.Marshal(response)
+	resp, _ := json.Marshal(response)
 	w.Write(resp)
 }
 
@@ -88,19 +94,45 @@ func handleRequests() {
 	router := mux.NewRouter().StrictSlash(true)
 
 	router.HandleFunc("/", homePage).Methods("GET")
-	router.HandleFunc("/api/v1/notes", getAllNotes).Methods("GET")
 	router.HandleFunc("/api/v1/notes", createNotes).Methods("POST")
+	router.HandleFunc("/api/v1/notes", getAllNotes).Methods("GET")
 	router.HandleFunc("/api/v1/notes/{id}", deleteNotes).Methods("DELETE")
 	router.HandleFunc("/api/v1/notes/{id}", updateNotes).Methods("PUT")
 
 	log.Fatal(http.ListenAndServe(":3000", router))
 }
 
+func insertNotes(db *sql.DB, note Note) error {
+	fmt.Println(db)
+	sql := "INSERT INTO notes(title, body) values (?, ?)"
+	result, err := db.Exec(sql, note.Title, note.Body)
+
+	
+	if err != nil {
+		fmt.Println(err)
+		return err
+	}
+	fmt.Println(result)
+
+	return nil
+}
+
 func main() {
-	allNotes = append(allNotes, Note{
-		Id:    "123",
-		Title: "Golang",
-		Body:  "Golang adalah bahasa dari Google",
-	})
+	var err error
+	DB, err = sql.Open("mysql", "root:@tcp(127.0.0.1:3306)/notesapi-go")
+
+
+	if err != nil {
+		panic(err.Error())
+	}
+
+	// defer DB.Close()
+
+	err = DB.Ping()
+
+	if err != nil {
+		fmt.Println(err)
+	}
+
 	handleRequests()
 }
